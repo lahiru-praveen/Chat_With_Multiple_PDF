@@ -17,59 +17,83 @@ genai.configure(api_key=api_key)
 
 
 def get_pdf_text(pdf_docs):
-    text = ""
-    for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-    return text
+    try:
+        text = ""
+        for pdf in pdf_docs:
+            pdf_reader = PdfReader(pdf)
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+        return text
+    except Exception as e:
+        st.error(f"Error reading PDF files: {e}")
+        return ""
 
 
 def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
-    chunks = text_splitter.split_text(text)
-    return chunks
+    try:
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+        chunks = text_splitter.split_text(text)
+        return chunks
+    except Exception as e:
+        st.error(f"Error splitting text: {e}")
+        return []
 
 
 def get_vector_store(text_chunks):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
-    vector_store.save_local("faiss_index")
+    try:
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
+        vector_store.save_local("faiss_index")
+    except Exception as e:
+        st.error(f"Error creating vector store: {e}")
 
 
 def get_conversational_chain():
-    prompt_template = """
-    Answer the question as detailed as possible from the provided context, make sure to provide all the details, if the answer is not in
-    provided context just say, "answer is not available in the context", don't provide the wrong answer\n\n
-    Context:\n {context}?\n
-    Question: \n{question}\n
+    try:
+        prompt_template = """
+        Provide a detailed answer based on the given context. If the answer is not present in the context, respond with "The information is not available in the provided context." Ensure accuracy and completeness in your answer.
 
-    Answer:
-    """
+        Context:
+        {context}
 
-    model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
-    prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
-    chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
+        Question:
+        {question}
 
-    return chain
+        Answer:
+        """
+
+        model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
+        prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+        chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
+
+        return chain
+    except Exception as e:
+        st.error(f"Error loading QA chain: {e}")
+        return None
 
 
 def user_input(user_question):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    try:
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
-    # Load FAISS index with allow_dangerous_deserialization=True
-    new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+        # Load FAISS index with allow_dangerous_deserialization=True
+        new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
 
-    docs = new_db.similarity_search(user_question)
-    chain = get_conversational_chain()
+        docs = new_db.similarity_search(user_question)
+        chain = get_conversational_chain()
 
-    response = chain(
-        {"input_documents": docs, "question": user_question},
-        return_only_outputs=True
-    )
+        if chain:
+            response = chain(
+                {"input_documents": docs, "question": user_question},
+                return_only_outputs=True
+            )
 
-    st.write("### Reply:")
-    st.write(response["output_text"], unsafe_allow_html=True)
+            st.write("### Response:")
+            st.write(response["output_text"], unsafe_allow_html=True)
+        else:
+            st.error("Error: Unable to create a conversational chain.")
+    except Exception as e:
+        st.error(f"Error processing user input: {e}")
 
 
 def main():
@@ -79,21 +103,22 @@ def main():
     st.markdown("""
         <style>
         .css-18e3th9 {
-            background-color: #f8f9fa;
+            background-color: #f0f2f6;
         }
         .css-1v0mbdj {
             padding: 20px;
         }
         .css-1d391kg {
             border-radius: 10px;
-            background-color: #e9ecef;
+            background-color: #ffffff;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
         }
         .stButton>button {
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 5px;
-            padding: 10px;
+            padding: 12px 24px;
             font-size: 16px;
         }
         .stButton>button:hover {
@@ -102,34 +127,51 @@ def main():
         .stTextInput>div>input {
             border-radius: 5px;
             border: 1px solid #ced4da;
-            padding: 10px;
+            padding: 12px;
+            font-size: 16px;
         }
         .stFileUploader>div>input {
             border-radius: 5px;
             border: 1px solid #ced4da;
+            padding: 12px;
+        }
+        .stApp {
+            background-image: linear-gradient(to bottom right, #e0f7fa, #b9fbc0);
+        }
+        .stMarkdown {
+            color: #333;
+        }
+        .stSpinner {
+            color: #007bff;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    st.header("Chat with PDF using Gemini 💁")
+    st.header("📚 Chat with PDF using Gemini")
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        user_question = st.text_input("Ask a Question from the PDF Files")
+        user_question = st.text_input("Ask a Question Based on the PDF Content:")
 
     if user_question:
         user_input(user_question)
 
     with col2:
-        st.title("Menu:")
-        pdf_docs = st.file_uploader("Upload your PDF Files here", accept_multiple_files=True)
+        st.title("📂 Menu")
+        pdf_docs = st.file_uploader("Upload PDF Files Here (multiple allowed):", accept_multiple_files=True)
         if st.button("Submit & Process"):
             with st.spinner("Processing..."):
                 raw_text = get_pdf_text(pdf_docs)
-                text_chunks = get_text_chunks(raw_text)
-                get_vector_store(text_chunks)
-                st.success("Processing Complete!")
+                if raw_text:
+                    text_chunks = get_text_chunks(raw_text)
+                    if text_chunks:
+                        get_vector_store(text_chunks)
+                        st.success("Processing Complete!")
+                    else:
+                        st.error("Error: No text chunks were created.")
+                else:
+                    st.error("Error: No text extracted from PDF.")
 
 
 if __name__ == "__main__":
