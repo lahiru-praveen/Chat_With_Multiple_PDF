@@ -1,5 +1,5 @@
 # Chat_With_Multiple_PDF
-Chat PDF with Gemini 💁
+Chat PDF with Gemini 💁 :
 This project leverages Streamlit and Google Generative AI to create an interactive chat interface that allows users to ask questions directly from PDF files. It integrates several key components:
 
 PDF Text Extraction: Extracts text from uploaded PDF files using PyPDF2.
