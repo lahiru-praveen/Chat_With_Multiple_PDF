@@ -10,9 +10,10 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
-os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+api_key = os.getenv("GOOGLE_API_KEY")
+genai.configure(api_key=api_key)
 
 
 def get_pdf_text(pdf_docs):
@@ -46,9 +47,7 @@ def get_conversational_chain():
     Answer:
     """
 
-    model = ChatGoogleGenerativeAI(model="gemini-pro",
-                                   temperature=0.3)
-
+    model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
 
@@ -62,36 +61,75 @@ def user_input(user_question):
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
 
     docs = new_db.similarity_search(user_question)
-
     chain = get_conversational_chain()
 
     response = chain(
-        {"input_documents": docs, "question": user_question}
-        , return_only_outputs=True)
+        {"input_documents": docs, "question": user_question},
+        return_only_outputs=True
+    )
 
-    print(response)
-    st.write("Reply: ", response["output_text"])
+    st.write("### Reply:")
+    st.write(response["output_text"], unsafe_allow_html=True)
 
 
 def main():
-    st.set_page_config("Chat PDF")
-    st.header("Chat with PDF using Gemini💁")
+    st.set_page_config(page_title="Chat with PDF", page_icon=":book:", layout="wide")
 
-    user_question = st.text_input("Ask a Question from the PDF Files")
+    # Custom CSS for styling
+    st.markdown("""
+        <style>
+        .css-18e3th9 {
+            background-color: #f8f9fa;
+        }
+        .css-1v0mbdj {
+            padding: 20px;
+        }
+        .css-1d391kg {
+            border-radius: 10px;
+            background-color: #e9ecef;
+        }
+        .stButton>button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        .stButton>button:hover {
+            background-color: #0056b3;
+        }
+        .stTextInput>div>input {
+            border-radius: 5px;
+            border: 1px solid #ced4da;
+            padding: 10px;
+        }
+        .stFileUploader>div>input {
+            border-radius: 5px;
+            border: 1px solid #ced4da;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.header("Chat with PDF using Gemini 💁")
+
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        user_question = st.text_input("Ask a Question from the PDF Files")
 
     if user_question:
         user_input(user_question)
 
-    with st.sidebar:
+    with col2:
         st.title("Menu:")
-        pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button",
-                                    accept_multiple_files=True)
+        pdf_docs = st.file_uploader("Upload your PDF Files here", accept_multiple_files=True)
         if st.button("Submit & Process"):
             with st.spinner("Processing..."):
                 raw_text = get_pdf_text(pdf_docs)
                 text_chunks = get_text_chunks(raw_text)
                 get_vector_store(text_chunks)
-                st.success("Done")
+                st.success("Processing Complete!")
 
 
 if __name__ == "__main__":
